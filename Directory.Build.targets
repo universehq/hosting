@@ -1,0 +1,11 @@
+<Project>
+  <ItemGroup Condition="'$(EnableDefaultItems)' != 'false'">
+    <None
+      Condition="'$(EnableDefaultNoneItems)' != 'false'"
+      Include="**/*.props;**/*.targets"
+      Exclude="$(DefaultItemExcludes);$(DefaultExcludesInProjectFolder)"
+      Pack="true"
+      PackagePath="%(RecursiveDir)%(Filename)%(Extension)"
+    />
+  </ItemGroup>
+</Project>

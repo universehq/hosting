@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsAotCompatible>true</IsAotCompatible>
+    <!-- The native content must use the application's RID across project references. -->
+    <IsRidAgnostic>false</IsRidAgnostic>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageId>Universe.Hosting.NetHost</PackageId>
+    <VersionPrefix>0.0.1-alpha.1.0</VersionPrefix>
+    <Authors>$(Author)</Authors>
+    <Description>Discover the .NET host with a high-level C# API and Polyester results.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Polyester" Version="0.0.1-alpha.2.0" />
+    <ProjectReference Include="..\Hosting.Common\Universe.Hosting.Common.csproj" />
+    <InternalsVisibleTo Include="NetHost.UnitTests" />
+    <None Update="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <Import Project="build/Universe.Hosting.NetHost.targets" />
+</Project>

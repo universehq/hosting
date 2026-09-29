@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Hosting.Common/Universe.Hosting.Common.csproj" />
+    <Project Path="src/Hosting.HostFxr/Universe.Hosting.HostFxr.csproj" />
+    <Project Path="src/Hosting.NetHost/Universe.Hosting.NetHost.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DotNetLib/DotNetLib.csproj" />
+    <Project Path="tests/HostFxr.NativeAotSmoke/HostFxr.NativeAotSmoke.csproj" />
+    <Project Path="tests/HostFxr.UnitTests/HostFxr.UnitTests.csproj" />
+    <Project Path="tests/NetHost.UnitTests/NetHost.UnitTests.csproj" />
+    <Project Path="tests/NetHostTests/NetHostTests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,53 @@
+<Project>
+  <!-- Content participates in normal build/publish copying, including project references,
+       custom output directories, and single-file applications with a native sidecar. -->
+  <Target
+    Name="NetHostResolveNativeLibrary"
+    BeforeTargets="AssignTargetPaths"
+    DependsOnTargets="ResolveFrameworkReferences"
+    Condition="'$(TargetFramework)' != '' and '$(DesignTimeBuild)' != 'true' and '$(NetHostCopyNativeLibrary)' != 'false'"
+  >
+    <PropertyGroup>
+      <_NetHostRid>$(RuntimeIdentifier)</_NetHostRid>
+      <_NetHostRid Condition="'$(_NetHostRid)' == ''">$(AppHostRuntimeIdentifier)</_NetHostRid>
+      <_NetHostRid Condition="'$(_NetHostRid)' == ''">$(NETCoreSdkRuntimeIdentifier)</_NetHostRid>
+      <_NetHostName>libnethost.so</_NetHostName>
+      <_NetHostName Condition="$(_NetHostRid.StartsWith('win-'))">nethost.dll</_NetHostName>
+      <_NetHostName Condition="$(_NetHostRid.StartsWith('osx-'))">libnethost.dylib</_NetHostName>
+      <_NetHostSource>$(NetHostNativeLibraryPath)</_NetHostSource>
+      <_NetHostSource Condition="'$(_NetHostSource)' == '' and '$(AppHostSourcePath)' != ''"
+        >$([System.IO.Path]::GetDirectoryName('$(AppHostSourcePath)'))/$(_NetHostName)</_NetHostSource>
+      <_NetHostTargetFramework>net$(TargetFrameworkVersion.TrimStart('v'))</_NetHostTargetFramework>
+    </PropertyGroup>
+    <ItemGroup>
+      <_NetHostKnownPack
+        Include="@(KnownAppHostPack)"
+        Condition="'%(KnownAppHostPack.TargetFramework)' == '$(_NetHostTargetFramework)'"
+      />
+    </ItemGroup>
+    <PropertyGroup>
+      <_NetHostPackVersion>@(_NetHostKnownPack->'%(AppHostPackVersion)')</_NetHostPackVersion>
+      <_NetHostSource Condition="'$(_NetHostSource)' == ''"
+        >$(NetCoreTargetingPackRoot)/Microsoft.NETCore.App.Host.$(_NetHostRid)/$(_NetHostPackVersion)/runtimes/$(_NetHostRid)/native/$(_NetHostName)</_NetHostSource>
+      <_NetHostRestoredSource>$(NuGetPackageRoot)microsoft.netcore.app.host.$(_NetHostRid)/$(_NetHostPackVersion)/runtimes/$(_NetHostRid)/native/$(_NetHostName)</_NetHostRestoredSource>
+      <_NetHostSource
+        Condition="'$(NetHostNativeLibraryPath)' == '' and !Exists('$(_NetHostSource)') and Exists('$(_NetHostRestoredSource)')"
+        >$(_NetHostRestoredSource)</_NetHostSource>
+    </PropertyGroup>
+    <Error
+      Condition="!Exists('$(_NetHostSource)')"
+      Text="The nethost library for '$(_NetHostRid)' was not found at '$(_NetHostSource)'. Restore/install the matching .NET apphost pack, set NetHostNativeLibraryPath to the native library, or set NetHostCopyNativeLibrary=false to deploy it yourself."
+    />
+    <ItemGroup>
+      <Content
+        Include="$(_NetHostSource)"
+        Link="$(_NetHostName)"
+        CopyToOutputDirectory="PreserveNewest"
+        CopyToPublishDirectory="PreserveNewest"
+        ExcludeFromSingleFile="true"
+        Pack="false"
+        Visible="false"
+      />
+    </ItemGroup>
+  </Target>
+</Project>

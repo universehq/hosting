@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageId>Universe.Hosting.HostFxr</PackageId>
+    <VersionPrefix>0.0.1-alpha.1.0</VersionPrefix>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <Description>A high-level C# wrapper for the .NET host with Polyester results, managed delegates, and disposable runtime contexts.</Description>
+    <Authors>$(Author)</Authors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Failure" Version="0.0.1-alpha.1.1" />
+    <PackageReference Include="Polyester" Version="0.0.1-alpha.2.0" />
+    <ProjectReference Include="..\Hosting.Common\Universe.Hosting.Common.csproj" />
+    <InternalsVisibleTo Include="HostFxr.UnitTests" />
+    <None Update="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+</Project>

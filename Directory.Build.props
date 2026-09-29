@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <Author>Ryan Martin</Author>
+    <TargetFramework>net11.0</TargetFramework>
+    <LangVersion>preview</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <VersionPrefix>0.0.1-alpha.1.0</VersionPrefix>
+  </PropertyGroup>
+</Project>
