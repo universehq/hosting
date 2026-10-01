@@ -1,7 +1,5 @@
 # Hosting
 
-## Introduction
-
 Hosting provides C# wrappers around the .NET native hosting APIs for discovering the .NET host, initializing a runtime, running managed applications, and calling methods in managed components. The libraries target .NET 11 or later and provide typed results, managed delegates, and disposable runtime contexts.
 
 - [Universe.Hosting.NetHost](./src/Hosting.NetHost/README.md) locates the hostfxr library and supports both JIT and Native AOT applications.
