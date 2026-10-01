@@ -16,7 +16,7 @@
 
   <ItemGroup>
     <PackageReference Include="Failure" Version="0.0.1-alpha.1.1" />
-    <PackageReference Include="Polyester" Version="0.0.1-alpha.2.0" />
+    <PackageReference Include="Polyester" Version="0.0.1-alpha.2.3" />
     <ProjectReference Include="..\Hosting.Common\Universe.Hosting.Common.csproj" />
     <InternalsVisibleTo Include="HostFxr.UnitTests" />
     <None Update="README.md" Pack="true" PackagePath="/" />
