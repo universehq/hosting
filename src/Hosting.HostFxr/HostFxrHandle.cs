@@ -1,7 +1,5 @@
 using System.Runtime.InteropServices;
-
 using Polyester;
-
 using Universe.Hosting.HostFxr.Errors;
 
 namespace Universe.Hosting.HostFxr;
@@ -30,8 +28,11 @@ public sealed class HostFxrHandle : IDisposable
             var code = NativeMethods.GetRuntimeProperty(_context, name, out var value);
             return code == 0 && value is not null
                 ? Result<string, HostFxrHandleError>.Success(value)
-                : Result<string, HostFxrHandleError>.Failure(code == 0
-                    ? HostFxrHandleError.PropertyNotFound : HostFxrHandleError.MapErrorCode(code));
+                : Result<string, HostFxrHandleError>.Failure(
+                    code == 0
+                        ? HostFxrHandleError.PropertyNotFound
+                        : HostFxrHandleError.MapErrorCode(code)
+                );
         });
     }
 
@@ -45,13 +46,18 @@ public sealed class HostFxrHandle : IDisposable
     }
 
     /// <summary>Returns a managed snapshot of the context's runtime properties.</summary>
-    public Result<IReadOnlyDictionary<string, string>, HostFxrHandleError> GetRuntimeProperties() => Invoke(() =>
-    {
-        var code = NativeMethods.GetRuntimeProperties(_context, out var properties);
-        return code == 0
-            ? Result<IReadOnlyDictionary<string, string>, HostFxrHandleError>.Success(properties)
-            : Result<IReadOnlyDictionary<string, string>, HostFxrHandleError>.Failure(HostFxrHandleError.MapErrorCode(code));
-    });
+    public Result<IReadOnlyDictionary<string, string>, HostFxrHandleError> GetRuntimeProperties() =>
+        Invoke(() =>
+        {
+            var code = NativeMethods.GetRuntimeProperties(_context, out var properties);
+            return code == 0
+                ? Result<IReadOnlyDictionary<string, string>, HostFxrHandleError>.Success(
+                    properties
+                )
+                : Result<IReadOnlyDictionary<string, string>, HostFxrHandleError>.Failure(
+                    HostFxrHandleError.MapErrorCode(code)
+                );
+        });
 
     /// <summary>Loads an assembly and binds a public static method to a concrete delegate type.</summary>
     /// <param name="assemblyPath">Path to the component assembly.</param>
@@ -62,7 +68,11 @@ public sealed class HostFxrHandle : IDisposable
     /// <remarks>Delegates cross a native ABI boundary: their parameters must be marshalable.
     /// Arbitrary managed objects cannot be shared between the host and the hosted runtime.</remarks>
     public Result<TDelegate, HostFxrHandleError> LoadAssemblyAndGetDelegate<TDelegate>(
-        string assemblyPath, string typeName, string methodName, string delegateTypeName)
+        string assemblyPath,
+        string typeName,
+        string methodName,
+        string delegateTypeName
+    )
         where TDelegate : Delegate
     {
         NativeString.Validate(assemblyPath, nameof(assemblyPath));
@@ -73,7 +83,10 @@ public sealed class HostFxrHandle : IDisposable
 
     /// <summary>Binds a method in the default load context to a concrete, ABI-compatible delegate.</summary>
     public Result<TDelegate, HostFxrHandleError> GetDelegate<TDelegate>(
-        string typeName, string methodName, string delegateTypeName)
+        string typeName,
+        string methodName,
+        string delegateTypeName
+    )
         where TDelegate : Delegate
     {
         ValidateDelegate<TDelegate>(delegateTypeName);
@@ -84,8 +97,11 @@ public sealed class HostFxrHandle : IDisposable
     /// <summary>Loads an assembly and wraps the default component entry point as a C# delegate.</summary>
     /// <remarks>The hosted method must have signature int(nint data, int size).
     /// The delegate passes a copy of TData using its in-memory size, and returns the method's exit code.</remarks>
-    public Result<ComponentEntryPoint<TData>, HostFxrHandleError> LoadAssemblyAndGetEntryPoint<TData>(
-        string assemblyPath, string typeName, string methodName) where TData : unmanaged
+    public Result<
+        ComponentEntryPoint<TData>,
+        HostFxrHandleError
+    > LoadAssemblyAndGetEntryPoint<TData>(string assemblyPath, string typeName, string methodName)
+        where TData : unmanaged
     {
         NativeString.Validate(assemblyPath, nameof(assemblyPath));
         return Bind(Path.GetFullPath(assemblyPath), typeName, methodName, null)
@@ -94,20 +110,27 @@ public sealed class HostFxrHandle : IDisposable
 
     /// <summary>Wraps a default component entry point from the default load context.</summary>
     public Result<ComponentEntryPoint<TData>, HostFxrHandleError> GetEntryPoint<TData>(
-        string typeName, string methodName) where TData : unmanaged =>
+        string typeName,
+        string methodName
+    )
+        where TData : unmanaged =>
         Bind(null, typeName, methodName, null).Convert(CreateEntryPoint<TData>);
 
     public Result<Unit, HostFxrHandleError> LoadAssembly(string assemblyPath)
     {
         NativeString.Validate(assemblyPath, nameof(assemblyPath));
         var fullPath = Path.GetFullPath(assemblyPath);
-        return Invoke(() => GetRuntimeDelegate(HostFxrDelegateType.LoadAssembly)
-            .Convert(pointer => FromCode(CoreClrDelegates.LoadAssembly(pointer, fullPath))));
+        return Invoke(() =>
+            GetRuntimeDelegate(HostFxrDelegateType.LoadAssembly)
+                .Convert(pointer => FromCode(CoreClrDelegates.LoadAssembly(pointer, fullPath)))
+        );
     }
 
     /// <summary>Loads assembly and optional symbol bytes into the default load context.</summary>
     public Result<Unit, HostFxrHandleError> LoadAssemblyBytes(
-        ReadOnlySpan<byte> assemblyBytes, ReadOnlySpan<byte> symbolsBytes = default)
+        ReadOnlySpan<byte> assemblyBytes,
+        ReadOnlySpan<byte> symbolsBytes = default
+    )
     {
         if (assemblyBytes.IsEmpty)
             throw new ArgumentException("Assembly bytes cannot be empty.", nameof(assemblyBytes));
@@ -119,12 +142,16 @@ public sealed class HostFxrHandle : IDisposable
             {
                 var result = GetRuntimeDelegate(HostFxrDelegateType.LoadAssemblyBytes);
                 return result.TrySuccess(out var pointer)
-                    ? FromCode(CoreClrDelegates.LoadAssemblyBytes(pointer, assemblyBytes, symbolsBytes))
+                    ? FromCode(
+                        CoreClrDelegates.LoadAssemblyBytes(pointer, assemblyBytes, symbolsBytes)
+                    )
                     : Result<Unit, HostFxrHandleError>.Failure(result.Error);
             }
             catch (EntryPointNotFoundException)
             {
-                return Result<Unit, HostFxrHandleError>.Failure(HostFxrHandleError.EntryPointNotFound);
+                return Result<Unit, HostFxrHandleError>.Failure(
+                    HostFxrHandleError.EntryPointNotFound
+                );
             }
             finally
             {
@@ -153,7 +180,11 @@ public sealed class HostFxrHandle : IDisposable
     }
 
     private Result<nint, HostFxrHandleError> Bind(
-        string? assemblyPath, string typeName, string methodName, string? delegateTypeName)
+        string? assemblyPath,
+        string typeName,
+        string methodName,
+        string? delegateTypeName
+    )
     {
         NativeString.Validate(typeName, nameof(typeName));
         NativeString.Validate(methodName, nameof(methodName));
@@ -162,12 +193,19 @@ public sealed class HostFxrHandle : IDisposable
             var type = assemblyPath is null
                 ? HostFxrDelegateType.GetFunctionPointer
                 : HostFxrDelegateType.LoadAssemblyAndGetFunctionPointer;
-            return GetRuntimeDelegate(type).Convert(function =>
-            {
-                var code = CoreClrDelegates.GetFunctionPointer(
-                    function, assemblyPath, typeName, methodName, delegateTypeName, out var pointer);
-                return PointerResult(code, pointer);
-            });
+            return GetRuntimeDelegate(type)
+                .Convert(function =>
+                {
+                    var code = CoreClrDelegates.GetFunctionPointer(
+                        function,
+                        assemblyPath,
+                        typeName,
+                        methodName,
+                        delegateTypeName,
+                        out var pointer
+                    );
+                    return PointerResult(code, pointer);
+                });
         });
     }
 
@@ -177,21 +215,23 @@ public sealed class HostFxrHandle : IDisposable
         return PointerResult(code, pointer);
     }
 
-    private ComponentEntryPoint<TData> CreateEntryPoint<TData>(nint pointer) where TData : unmanaged => data =>
-    {
-        lock (_sync)
+    private ComponentEntryPoint<TData> CreateEntryPoint<TData>(nint pointer)
+        where TData : unmanaged =>
+        data =>
         {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            try
+            lock (_sync)
             {
-                return CoreClrDelegates.InvokeEntryPoint(pointer, data);
+                ObjectDisposedException.ThrowIf(_disposed, this);
+                try
+                {
+                    return CoreClrDelegates.InvokeEntryPoint(pointer, data);
+                }
+                finally
+                {
+                    GC.KeepAlive(_context);
+                }
             }
-            finally
-            {
-                GC.KeepAlive(_context);
-            }
-        }
-    };
+        };
 
     private Result<T, HostFxrHandleError> Invoke<T>(Func<Result<T, HostFxrHandleError>> operation)
     {
@@ -213,23 +253,34 @@ public sealed class HostFxrHandle : IDisposable
         }
     }
 
-    private static void ValidateDelegate<TDelegate>(string delegateTypeName) where TDelegate : Delegate
+    private static void ValidateDelegate<TDelegate>(string delegateTypeName)
+        where TDelegate : Delegate
     {
         NativeString.Validate(delegateTypeName, nameof(delegateTypeName));
-        if (typeof(TDelegate).IsGenericType || typeof(TDelegate) == typeof(Delegate)
-            || typeof(TDelegate) == typeof(MulticastDelegate))
-            throw new ArgumentException("Use a concrete, non-generic delegate type.", nameof(TDelegate));
+        if (
+            typeof(TDelegate).IsGenericType
+            || typeof(TDelegate) == typeof(Delegate)
+            || typeof(TDelegate) == typeof(MulticastDelegate)
+        )
+            throw new ArgumentException(
+                "Use a concrete, non-generic delegate type.",
+                nameof(TDelegate)
+            );
     }
 
     private static Result<nint, HostFxrHandleError> PointerResult(int code, nint pointer) =>
         code == 0 && pointer != 0
             ? Result<nint, HostFxrHandleError>.Success(pointer)
-            : Result<nint, HostFxrHandleError>.Failure(code == 0
-                ? HostFxrHandleError.HostInvalidState : HostFxrHandleError.MapErrorCode(code));
+            : Result<nint, HostFxrHandleError>.Failure(
+                code == 0
+                    ? HostFxrHandleError.HostInvalidState
+                    : HostFxrHandleError.MapErrorCode(code)
+            );
 
-    private static Result<Unit, HostFxrHandleError> FromCode(int code) => code == 0
-        ? Result<Unit, HostFxrHandleError>.Success(Unit.Instance)
-        : Result<Unit, HostFxrHandleError>.Failure(HostFxrHandleError.MapErrorCode(code));
+    private static Result<Unit, HostFxrHandleError> FromCode(int code) =>
+        code == 0
+            ? Result<Unit, HostFxrHandleError>.Success(Unit.Instance)
+            : Result<Unit, HostFxrHandleError>.Failure(HostFxrHandleError.MapErrorCode(code));
 
     public void Close() => Dispose();
 
@@ -247,4 +298,5 @@ public sealed class HostFxrHandle : IDisposable
 }
 
 /// <summary>A managed wrapper around a component entry point, returning its exit code.</summary>
-public delegate int ComponentEntryPoint<in T>(T data) where T : unmanaged;
+public delegate int ComponentEntryPoint<in T>(T data)
+    where T : unmanaged;

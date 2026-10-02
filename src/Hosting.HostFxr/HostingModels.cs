@@ -24,14 +24,17 @@ public sealed record DotnetEnvironmentInfo(
     string HostFxrVersion,
     string HostFxrCommitHash,
     IReadOnlyList<DotnetEnvironmentSdkInfo> Sdks,
-    IReadOnlyList<DotnetEnvironmentFrameworkInfo> Frameworks);
+    IReadOnlyList<DotnetEnvironmentFrameworkInfo> Frameworks
+);
 
 public sealed record FrameworkResult(
     string Name,
     string RequestedVersion,
     string? ResolvedVersion,
-    string? ResolvedPath);
+    string? ResolvedPath
+);
 
 public sealed record ResolveFrameworksResult(
     IReadOnlyList<FrameworkResult> ResolvedFrameworks,
-    IReadOnlyList<FrameworkResult> UnresolvedFrameworks);
+    IReadOnlyList<FrameworkResult> UnresolvedFrameworks
+);

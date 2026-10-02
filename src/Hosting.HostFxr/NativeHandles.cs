@@ -1,12 +1,12 @@
 using System.Runtime.InteropServices;
-
 using Microsoft.Win32.SafeHandles;
 
 namespace Universe.Hosting.HostFxr;
 
 internal sealed class NativeLibraryHandle : SafeHandleZeroOrMinusOneIsInvalid
 {
-    public NativeLibraryHandle(string path) : base(ownsHandle: true)
+    public NativeLibraryHandle(string path)
+        : base(ownsHandle: true)
     {
         SetHandle(NativeLibrary.Load(path));
     }
@@ -26,7 +26,8 @@ internal sealed class HostContextHandle : SafeHandleZeroOrMinusOneIsInvalid
     private readonly nint _close;
     private readonly NativeLibraryHandle _library;
 
-    public HostContextHandle(nint context, nint close, NativeLibraryHandle library) : base(ownsHandle: true)
+    public HostContextHandle(nint context, nint close, NativeLibraryHandle library)
+        : base(ownsHandle: true)
     {
         var added = false;
         library.DangerousAddRef(ref added);

@@ -1,7 +1,5 @@
-using Universe.Hosting.Common;
-
 using System.Collections.ObjectModel;
-
+using Universe.Hosting.Common;
 using Universe.Hosting.HostFxr.Errors;
 
 namespace Universe.Hosting.HostFxr;
@@ -12,9 +10,15 @@ internal static unsafe class NativeMethods
         NativeLibraryHandle library,
         string[] args,
         InitializeParameters? parameters,
-        out nint contextHandle)
+        out nint contextHandle
+    )
     {
-        var invoke = (delegate* unmanaged[Cdecl]<int, nint*, HostFxrNative.InitializeParameters*, nint*, int>)
+        var invoke = (delegate* unmanaged[Cdecl]<
+            int,
+            nint*,
+            HostFxrNative.InitializeParameters*,
+            nint*,
+            int>)
             library.GetExport("hostfxr_initialize_for_dotnet_command_line");
         using var hostPath = new NativeString(parameters?.HostPath);
         using var dotNetRoot = new NativeString(parameters?.DotNetRoot);
@@ -32,7 +36,12 @@ internal static unsafe class NativeMethods
             nint context = 0;
             fixed (nint* argv = pointers)
             {
-                var code = invoke(args.Length, argv, parameters.HasValue ? &nativeParameters : null, &context);
+                var code = invoke(
+                    args.Length,
+                    argv,
+                    parameters.HasValue ? &nativeParameters : null,
+                    &context
+                );
                 contextHandle = context;
                 return code;
             }
@@ -48,9 +57,14 @@ internal static unsafe class NativeMethods
         NativeLibraryHandle library,
         string runtimeConfigPath,
         InitializeParameters? parameters,
-        out nint contextHandle)
+        out nint contextHandle
+    )
     {
-        var invoke = (delegate* unmanaged[Cdecl]<nint, HostFxrNative.InitializeParameters*, nint*, int>)
+        var invoke = (delegate* unmanaged[Cdecl]<
+            nint,
+            HostFxrNative.InitializeParameters*,
+            nint*,
+            int>)
             library.GetExport("hostfxr_initialize_for_runtime_config");
         using var path = new NativeString(runtimeConfigPath);
         using var hostPath = new NativeString(parameters?.HostPath);
@@ -62,12 +76,16 @@ internal static unsafe class NativeMethods
         return code;
     }
 
-    private static HostFxrNative.InitializeParameters CreateParameters(NativeString hostPath, NativeString dotNetRoot) => new()
-    {
-        Size = (nuint)sizeof(HostFxrNative.InitializeParameters),
-        HostPath = hostPath.Pointer,
-        DotNetRoot = dotNetRoot.Pointer,
-    };
+    private static HostFxrNative.InitializeParameters CreateParameters(
+        NativeString hostPath,
+        NativeString dotNetRoot
+    ) =>
+        new()
+        {
+            Size = (nuint)sizeof(HostFxrNative.InitializeParameters),
+            HostPath = hostPath.Pointer,
+            DotNetRoot = dotNetRoot.Pointer,
+        };
 
     public static int GetRuntimeProperty(HostContextHandle context, string name, out string? value)
     {
@@ -89,7 +107,10 @@ internal static unsafe class NativeMethods
         return invoke(context.DangerousGetHandle(), key.Pointer, text.Pointer);
     }
 
-    public static int GetRuntimeProperties(HostContextHandle context, out IReadOnlyDictionary<string, string> properties)
+    public static int GetRuntimeProperties(
+        HostContextHandle context,
+        out IReadOnlyDictionary<string, string> properties
+    )
     {
         var invoke = (delegate* unmanaged[Cdecl]<nint, nuint*, nint*, nint*, int>)
             context.Library.GetExport("hostfxr_get_runtime_properties");
@@ -122,7 +143,11 @@ internal static unsafe class NativeMethods
         return code;
     }
 
-    public static int GetRuntimeDelegate(HostContextHandle context, HostFxrDelegateType type, out nint pointer)
+    public static int GetRuntimeDelegate(
+        HostContextHandle context,
+        HostFxrDelegateType type,
+        out nint pointer
+    )
     {
         var invoke = (delegate* unmanaged[Cdecl]<nint, HostFxrDelegateType, nint*, int>)
             context.Library.GetExport("hostfxr_get_runtime_delegate");
@@ -134,7 +159,8 @@ internal static unsafe class NativeMethods
 
     public static int RunApp(HostContextHandle context)
     {
-        var invoke = (delegate* unmanaged[Cdecl]<nint, int>)context.Library.GetExport("hostfxr_run_app");
+        var invoke = (delegate* unmanaged[Cdecl]<nint, int>)
+            context.Library.GetExport("hostfxr_run_app");
         return invoke(context.DangerousGetHandle());
     }
 }

@@ -1,11 +1,23 @@
 <Project>
-  <Target Name="HostFxrEnsurePublishNativeAot" BeforeTargets="Publish" Condition="'$(OutputType)' == 'Exe' or '$(OutputType)' == 'WinExe'">
-    <Error Condition="'$(PublishAot)' != 'true'" Text="This project requires NativeAOT. Set PublishAot=true in the project file." />
+  <Target
+    Name="HostFxrEnsurePublishNativeAot"
+    BeforeTargets="Publish"
+    Condition="'$(OutputType)' == 'Exe' or '$(OutputType)' == 'WinExe'"
+  >
+    <Error
+      Condition="'$(PublishAot)' != 'true'"
+      Text="This project requires NativeAOT. Set PublishAot=true in the project file."
+    />
   </Target>
 
-  <Target Name="HostFxrEnsureBuildNativeAot" BeforeTargets="Build" Condition="'$(OutputType)' == 'Exe' or '$(OutputType)' == 'WinExe'">
+  <Target
+    Name="HostFxrEnsureBuildNativeAot"
+    BeforeTargets="Build"
+    Condition="'$(OutputType)' == 'Exe' or '$(OutputType)' == 'WinExe'"
+  >
     <Warning
       Condition="'$(PublishAot)' != 'true'"
-      Text="This package is intended for NativeAOT projects. Set PublishAot=true when publishing to use NativeAOT." />
+      Text="This package is intended for NativeAOT projects. Set PublishAot=true when publishing to use NativeAOT."
+    />
   </Target>
 </Project>

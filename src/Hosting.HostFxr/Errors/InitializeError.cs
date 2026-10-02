@@ -47,33 +47,25 @@ internal static class InitializeErrorExtensions
 
                 ErrorCodes.FrameworkCompatRetry => InitializeError.FrameworkCompatRetry,
 
-                ErrorCodes.FrameworkCompatFailure =>
-                    InitializeError.FrameworkCompatFailure,
+                ErrorCodes.FrameworkCompatFailure => InitializeError.FrameworkCompatFailure,
 
-                ErrorCodes.AppHostExeNotBoundFailure =>
-                    InitializeError.AppHostExeNotBoundFailure,
+                ErrorCodes.AppHostExeNotBoundFailure => InitializeError.AppHostExeNotBoundFailure,
 
-                ErrorCodes.FrameworkMissingFailure =>
-                    InitializeError.FrameworkMissingFailure,
+                ErrorCodes.FrameworkMissingFailure => InitializeError.FrameworkMissingFailure,
 
                 ErrorCodes.CoreClrInitFailure => InitializeError.CoreClrInitFailure,
 
                 ErrorCodes.CoreClrBindFailure => InitializeError.CoreClrBindFailure,
 
-                ErrorCodes.CoreClrResolveFailure =>
-                    InitializeError.CoreClrResolveFailure,
+                ErrorCodes.CoreClrResolveFailure => InitializeError.CoreClrResolveFailure,
 
-                ErrorCodes.CoreHostCurHostFindFailure =>
-                    InitializeError.CoreHostCurHostFindFailure,
+                ErrorCodes.CoreHostCurHostFindFailure => InitializeError.CoreHostCurHostFindFailure,
 
-                ErrorCodes.CoreHostEntryPointFailure =>
-                    InitializeError.CoreHostEntryPointFailure,
+                ErrorCodes.CoreHostEntryPointFailure => InitializeError.CoreHostEntryPointFailure,
 
-                ErrorCodes.CoreHostLibLoadFailure =>
-                    InitializeError.CoreHostLibLoadFailure,
+                ErrorCodes.CoreHostLibLoadFailure => InitializeError.CoreHostLibLoadFailure,
 
-                ErrorCodes.CoreHostLibMissingFailure =>
-                    InitializeError.CoreHostLibMissingFailure,
+                ErrorCodes.CoreHostLibMissingFailure => InitializeError.CoreHostLibMissingFailure,
 
                 ErrorCodes.HostInvalidState => InitializeError.HostInvalidState,
 

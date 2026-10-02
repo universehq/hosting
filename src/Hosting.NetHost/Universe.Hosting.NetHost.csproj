@@ -18,7 +18,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Polyester" Version="0.0.1-alpha.2.3" />
+    <PackageReference Include="Polyester" Version="0.0.1-alpha.2.4" />
     <ProjectReference Include="..\Hosting.Common\Universe.Hosting.Common.csproj" />
     <InternalsVisibleTo Include="NetHost.UnitTests" />
     <None Update="README.md" Pack="true" PackagePath="/" />

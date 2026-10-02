@@ -20,15 +20,19 @@ internal sealed class NativeString : IDisposable
 
     public nint Pointer => _pointer;
 
-    public static string? Read(nint pointer) => OperatingSystem.IsWindows()
-        ? Marshal.PtrToStringUni(pointer)
-        : Marshal.PtrToStringUTF8(pointer);
+    public static string? Read(nint pointer) =>
+        OperatingSystem.IsWindows()
+            ? Marshal.PtrToStringUni(pointer)
+            : Marshal.PtrToStringUTF8(pointer);
 
     public static void Validate(string value, string parameterName, bool allowEmpty = false)
     {
         ArgumentNullException.ThrowIfNull(value, parameterName);
         if ((!allowEmpty && value.Length == 0) || value.Contains('\0'))
-            throw new ArgumentException("The string must be nonempty and contain no null characters.", parameterName);
+            throw new ArgumentException(
+                "The string must be nonempty and contain no null characters.",
+                parameterName
+            );
     }
 
     public void Dispose()

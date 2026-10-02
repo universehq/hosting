@@ -1,5 +1,4 @@
 using Polyester;
-
 using Universe.Hosting.HostFxr.Errors;
 using Universe.Hosting.HostFxr.Exceptions;
 
@@ -23,7 +22,8 @@ public sealed class HostFxr : IDisposable
     /// <summary>Prepares an application using arguments such as ["app.dll", "argument"].</summary>
     public Result<HostFxrHandle, InitializeError> InitializeForDotNetCommandLine(
         string[] args,
-        InitializeParameters? parameters = null)
+        InitializeParameters? parameters = null
+    )
     {
         ArgumentNullException.ThrowIfNull(args);
         if (args.Length == 0)
@@ -40,12 +40,18 @@ public sealed class HostFxr : IDisposable
                 // Resolve close before creating a context so every successful context can be released.
                 var close = _library.GetExport("hostfxr_close");
                 var code = NativeMethods.InitializeForDotNetCommandLine(
-                    _library, args, parameters, out var context);
+                    _library,
+                    args,
+                    parameters,
+                    out var context
+                );
                 return CreateContext(code, context, close);
             }
             catch (EntryPointNotFoundException)
             {
-                return Result<HostFxrHandle, InitializeError>.Failure(InitializeError.EntryPointNotFound);
+                return Result<HostFxrHandle, InitializeError>.Failure(
+                    InitializeError.EntryPointNotFound
+                );
             }
             finally
             {
@@ -57,7 +63,8 @@ public sealed class HostFxr : IDisposable
     /// <summary>Prepares a component from its .runtimeconfig.json file.</summary>
     public Result<HostFxrHandle, InitializeError> InitializeForRuntimeConfig(
         string runtimeConfigPath,
-        InitializeParameters? parameters = null)
+        InitializeParameters? parameters = null
+    )
     {
         NativeString.Validate(runtimeConfigPath, nameof(runtimeConfigPath));
         ValidateParameters(parameters);
@@ -69,12 +76,18 @@ public sealed class HostFxr : IDisposable
             {
                 var close = _library.GetExport("hostfxr_close");
                 var code = NativeMethods.InitializeForRuntimeConfig(
-                    _library, runtimeConfigPath, parameters, out var context);
+                    _library,
+                    runtimeConfigPath,
+                    parameters,
+                    out var context
+                );
                 return CreateContext(code, context, close);
             }
             catch (EntryPointNotFoundException)
             {
-                return Result<HostFxrHandle, InitializeError>.Failure(InitializeError.EntryPointNotFound);
+                return Result<HostFxrHandle, InitializeError>.Failure(
+                    InitializeError.EntryPointNotFound
+                );
             }
             finally
             {
@@ -92,7 +105,11 @@ public sealed class HostFxr : IDisposable
             return Result<HostFxrHandle, InitializeError>.Failure(InitializeError.HostInvalidState);
 
         return Result<HostFxrHandle, InitializeError>.Success(
-            new HostFxrHandle(new HostContextHandle(context, close, _library), (InitializationStatus)code));
+            new HostFxrHandle(
+                new HostContextHandle(context, close, _library),
+                (InitializationStatus)code
+            )
+        );
     }
 
     private static void ValidateParameters(InitializeParameters? parameters)
