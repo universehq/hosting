@@ -30,6 +30,23 @@ counts are handled internally. Native failures return typed NetHostError values;
 is decoded from a failed call. HostFxrNotFound means discovery could not find hostfxr,
 whereas NativeLibraryNotFound means nethost itself could not be loaded.
 
+`NetHostError` is a Failure-generated union implementing `Polyester.Error.IError`.
+Its messages include discovery hints, export names, or buffer sizes where relevant.
+Unknown codes return `UnknownNativeError` with the original code and operation;
+malformed native responses return `InvalidNativeResponse` with a reason and reported sizes.
+Native library failures retain the original loader exception in their `Exception` property.
+
+The union replaces the previous enum. Replace enum comparisons with case patterns:
+
+```csharp
+using Universe.Hosting.NetHost.Errors;
+
+if (result.TryFailure(out var error) && error is HostFxrNotFound missing)
+    Console.Error.WriteLine($"Check the .NET installation at {missing.DotNetRoot}");
+```
+
+Use the result's success case instead of checking `NetHostError.None`.
+
 Both this project and Hosting.HostFxr reference Hosting.Common.ErrorCodes. The former
 NetHost.Errors.StatusCode table has been removed. Polyester replaces DotNext: use
 TrySuccess, TryFailure, or OrThrow to access a result. GetHostFxrParameters is a readonly

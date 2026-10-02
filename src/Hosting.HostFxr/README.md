@@ -53,8 +53,38 @@ else if (result.TryFailure(out var error))
 ```
 
 Invalid managed arguments and use after disposal throw the usual .NET exceptions. Native
-operation failures are returned as typed errors; unknown codes map to `Unrecoverable`.
+operation failures return `HostFxrError`, a Failure-generated union implementing
+`Polyester.Error.IError`. Each case has a readable message and structured context such as
+the configuration path, runtime property name, or type and method names. Unknown codes
+return `UnknownNativeError` with the operation name, original native code, and input path when available.
+`DelegateBindingFailure` retains the requested type, method, and delegate when CoreCLR
+cannot bind the method, including missing methods and incompatible signatures.
 The wrapper does not catch unrelated managed exceptions.
+
+```csharp
+using Universe.Hosting.HostFxr.Errors;
+
+if (result.TryFailure(out var error))
+{
+    switch (error)
+    {
+        case InvalidConfigFile invalid:
+            Console.Error.WriteLine($"Check configuration: {invalid.RuntimeConfigPath}");
+            break;
+        case EntryPointNotFound missing:
+            Console.Error.WriteLine($"Missing hostfxr export: {missing.ExportName}");
+            break;
+        default:
+            Console.Error.WriteLine(error.ToString());
+            break;
+    }
+}
+```
+
+`HostFxrError` replaces the `InitializeError` and `HostFxrHandleError` enums in result
+signatures. Replace enum comparisons with case patterns such as
+`error is PropertyNotFound { PropertyName: "hosting.test" }`. Success is represented by
+the result's success case; the error union has no `None` case.
 
 Every successful initialization owns a separate disposable context. `InitializationStatus`
 distinguishes a new runtime, an already initialized runtime, and different runtime properties.

@@ -13,7 +13,7 @@ if (!RuntimeFeature.IsDynamicCodeSupported)
             DotNetRoot = Path.Combine(Path.GetTempPath(), $"missing-dotnet-{Guid.NewGuid():N}"),
         }
     );
-    if (missing.Error != NetHostError.HostFxrNotFound)
+    if (missing.Error is not HostFxrNotFound)
         throw new Exception($"Expected HostFxrNotFound, got {missing}.");
 }
 

@@ -20,7 +20,7 @@ public sealed class HostFxr : IDisposable
     }
 
     /// <summary>Prepares an application using arguments such as ["app.dll", "argument"].</summary>
-    public Result<HostFxrHandle, InitializeError> InitializeForDotNetCommandLine(
+    public Result<HostFxrHandle, HostFxrError> InitializeForDotNetCommandLine(
         string[] args,
         InitializeParameters? parameters = null
     )
@@ -45,12 +45,15 @@ public sealed class HostFxr : IDisposable
                     parameters,
                     out var context
                 );
-                return CreateContext(code, context, close);
+                return CreateContext(
+                    code, context, close,
+                    new NativeErrorContext("hostfxr_initialize_for_dotnet_command_line", args[0])
+                );
             }
-            catch (EntryPointNotFoundException)
+            catch (NativeExportNotFoundException error)
             {
-                return Result<HostFxrHandle, InitializeError>.Failure(
-                    InitializeError.EntryPointNotFound
+                return Result<HostFxrHandle, HostFxrError>.Failure(
+                    new EntryPointNotFound(error.ExportName)
                 );
             }
             finally
@@ -61,7 +64,7 @@ public sealed class HostFxr : IDisposable
     }
 
     /// <summary>Prepares a component from its .runtimeconfig.json file.</summary>
-    public Result<HostFxrHandle, InitializeError> InitializeForRuntimeConfig(
+    public Result<HostFxrHandle, HostFxrError> InitializeForRuntimeConfig(
         string runtimeConfigPath,
         InitializeParameters? parameters = null
     )
@@ -81,12 +84,15 @@ public sealed class HostFxr : IDisposable
                     parameters,
                     out var context
                 );
-                return CreateContext(code, context, close);
+                return CreateContext(
+                    code, context, close,
+                    new NativeErrorContext("hostfxr_initialize_for_runtime_config", runtimeConfigPath)
+                );
             }
-            catch (EntryPointNotFoundException)
+            catch (NativeExportNotFoundException error)
             {
-                return Result<HostFxrHandle, InitializeError>.Failure(
-                    InitializeError.EntryPointNotFound
+                return Result<HostFxrHandle, HostFxrError>.Failure(
+                    new EntryPointNotFound(error.ExportName)
                 );
             }
             finally
@@ -96,15 +102,23 @@ public sealed class HostFxr : IDisposable
         }
     }
 
-    private Result<HostFxrHandle, InitializeError> CreateContext(int code, nint context, nint close)
+    private Result<HostFxrHandle, HostFxrError> CreateContext(
+        int code,
+        nint context,
+        nint close,
+        NativeErrorContext errorContext
+    )
     {
-        var error = InitializeError.MapErrorCode(code);
-        if (error != InitializeError.None)
-            return Result<HostFxrHandle, InitializeError>.Failure(error);
+        if (!HostFxrError.IsInitializationSuccess(code))
+            return Result<HostFxrHandle, HostFxrError>.Failure(
+                HostFxrError.MapErrorCode(code, errorContext)
+            );
         if (context == 0)
-            return Result<HostFxrHandle, InitializeError>.Failure(InitializeError.HostInvalidState);
+            return Result<HostFxrHandle, HostFxrError>.Failure(
+                new HostInvalidState(errorContext.Operation)
+            );
 
-        return Result<HostFxrHandle, InitializeError>.Success(
+        return Result<HostFxrHandle, HostFxrError>.Success(
             new HostFxrHandle(
                 new HostContextHandle(context, close, _library),
                 (InitializationStatus)code

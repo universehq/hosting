@@ -1,5 +1,8 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Polyester;
+using Polyester.Error;
+using Universe.Hosting.Common;
 using Universe.Hosting.HostFxr;
 using Universe.Hosting.HostFxr.Errors;
 using Host = Universe.Hosting.HostFxr.HostFxr;
@@ -13,16 +16,20 @@ public class HostFxrHandleTest
     [TestCase(2)]
     public void AllInitializationSuccessCodesAreRecognized(int code)
     {
-        Assert.That(InitializeError.MapErrorCode(code), Is.EqualTo(InitializeError.None));
+        Assert.That(HostFxrError.IsInitializationSuccess(code), Is.True);
     }
 
-    [TestCase(unchecked((int)0x800080a5), InitializeError.HostIncompatibleConfig)]
-    [TestCase(unchecked((int)0x80008093), InitializeError.InvalidConfigFile)]
-    [TestCase(unchecked((int)0x80008081), InitializeError.InvalidArgument)]
-    [TestCase(3, InitializeError.Unrecoverable)]
-    public void InitializationErrorsArePreserved(int code, InitializeError expected)
+    [TestCase(unchecked((int)0x800080a5), typeof(HostIncompatibleConfig))]
+    [TestCase(unchecked((int)0x80008093), typeof(InvalidConfigFile))]
+    [TestCase(unchecked((int)0x80008081), typeof(InvalidArgument))]
+    [TestCase(3, typeof(UnknownNativeError))]
+    public void InitializationErrorsArePreserved(int code, Type expected)
     {
-        Assert.That(InitializeError.MapErrorCode(code), Is.EqualTo(expected));
+        Assert.That(HostFxrError.IsInitializationSuccess(code), Is.False);
+        var error = HostFxrError.MapErrorCode(code,
+            new NativeErrorContext("hostfxr_initialize_for_runtime_config", "Plugin.runtimeconfig.json"));
+        Assert.That(error.Value, Is.TypeOf(expected));
+        Assert.That(error.ToString(), Is.Not.Empty);
     }
 
     [TestCase("")]
@@ -118,11 +125,84 @@ public class HostFxrHandleTest
         return 0;
     }
 
-    [TestCase(unchecked((int)0x800080a4), HostFxrHandleError.PropertyNotFound)]
-    [TestCase(unchecked((int)0x80070002), HostFxrHandleError.AssemblyNotFound)]
-    [TestCase(unchecked((int)0x80131513), HostFxrHandleError.MethodNotFound)]
-    public void ContextErrorsAreTyped(int code, HostFxrHandleError expected)
+    [TestCase(unchecked((int)0x800080a4), typeof(PropertyNotFound))]
+    [TestCase(unchecked((int)0x80070002), typeof(AssemblyNotFound))]
+    [TestCase(unchecked((int)0x80131513), typeof(MethodNotFound))]
+    public void ContextErrorsAreTyped(int code, Type expected)
     {
-        Assert.That(HostFxrHandleError.MapErrorCode(code), Is.EqualTo(expected));
+        var error = HostFxrError.MapErrorCode(code,
+            new NativeErrorContext("get_function_pointer", "Plugin.dll", "property", "Plugin.EntryPoints, Plugin", "Run"));
+        Assert.That(error.Value, Is.TypeOf(expected));
+    }
+
+    [Test]
+    public void ErrorMessagesAndPatternsRetainInputContext()
+    {
+        var context = new NativeErrorContext("get_function_pointer", "组件.dll", "runtime.property", "Plugin.EntryPoints, Plugin", "Run");
+        var config = HostFxrError.MapErrorCode(ErrorCodes.InvalidConfigFile, context);
+        var property = HostFxrError.MapErrorCode(ErrorCodes.HostPropertyNotFound, context);
+        var method = HostFxrError.MapErrorCode(ErrorCodes.HResults.MissingMethod, context);
+
+        Assert.That(config is InvalidConfigFile { RuntimeConfigPath: "组件.dll" }, Is.True);
+        Assert.That(property is PropertyNotFound { PropertyName: "runtime.property" }, Is.True);
+        Assert.That(method is MethodNotFound { TypeName: "Plugin.EntryPoints, Plugin", MethodName: "Run" }, Is.True);
+        Assert.That(config.ToString(), Does.Contain(context.Path));
+        Assert.That(property.ToString(), Does.Contain(context.PropertyName));
+        Assert.That(method.ToString(), Does.Contain(context.TypeName).And.Contain(context.MethodName));
+        IError reported = method;
+        Assert.That(reported.ToString(), Is.EqualTo(method.ToString()));
+        Assert.That(reported.Source, Is.Null);
+    }
+
+    [TestCase(-1)]
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(unchecked((int)0x81234567))]
+    public void UnknownOperationCodesRetainNativeDiagnostics(int code)
+    {
+        var error = HostFxrError.MapErrorCode(code, new NativeErrorContext("get_function_pointer"));
+        Assert.That(error.Value, Is.EqualTo(new UnknownNativeError("get_function_pointer", code)));
+        var result = Result<int, HostFxrError>.Failure(error);
+        Assert.That(result.ToString(), Does.Contain("get_function_pointer").And.Contain($"0x{code:X8}"));
+        var exception = Assert.Throws<Exception>(() => result.OrThrow());
+        Assert.That(exception!.Message, Does.Contain($"0x{code:X8}"));
+    }
+
+    [Test]
+    public void BindingFailuresRetainTheRequestedSignature()
+    {
+        var context = new NativeErrorContext("get_function_pointer", TypeName: "Plugin.EntryPoints, Plugin",
+            MethodName: "Run", DelegateTypeName: "Plugin.Callback, Plugin");
+        var error = HostFxrError.MapErrorCode(ErrorCodes.HResults.InvalidArgument, context);
+        Assert.That(error.Value, Is.EqualTo(new DelegateBindingFailure(context.Operation,
+            context.TypeName, context.MethodName, context.DelegateTypeName, context.Path)));
+        Assert.That(error.ToString(), Does.Contain(context.TypeName)
+            .And.Contain(context.MethodName).And.Contain(context.DelegateTypeName));
+
+        var argument = HostFxrError.MapErrorCode(ErrorCodes.HResults.InvalidArgument,
+            new NativeErrorContext("load_assembly"));
+        Assert.That(argument.Value, Is.TypeOf<InvalidArgument>());
+    }
+
+    [Test]
+    public unsafe void MissingNativeExportsReportTheExactName()
+    {
+        var libraryName =
+            OperatingSystem.IsWindows() ? "kernel32.dll"
+            : OperatingSystem.IsMacOS() ? "/usr/lib/libSystem.B.dylib"
+            : "libc.so.6";
+        using var library = new NativeLibraryHandle(libraryName);
+        var close = (nint)(delegate* unmanaged[Cdecl]<nint, int>)&CloseContext;
+        using var context = new HostFxrHandle(new HostContextHandle(1, close, library), InitializationStatus.Initialized);
+
+        var properties = context.GetRuntimeProperties();
+        Assert.That(properties.Error is EntryPointNotFound { ExportName: "hostfxr_get_runtime_properties" }, Is.True);
+        Assert.That(properties.Error.ToString(), Does.Contain("hostfxr_get_runtime_properties"));
+        var value = context.GetRuntimePropertyValue("test");
+        Assert.That(value.Error is EntryPointNotFound { ExportName: "hostfxr_get_runtime_property_value" }, Is.True);
+        var set = context.SetRuntimePropertyValue("test", "value");
+        Assert.That(set.Error is EntryPointNotFound { ExportName: "hostfxr_set_runtime_property_value" }, Is.True);
+        var bytes = context.LoadAssemblyBytes([1]);
+        Assert.That(bytes.Error is EntryPointNotFound { ExportName: "hostfxr_get_runtime_delegate" }, Is.True);
     }
 }

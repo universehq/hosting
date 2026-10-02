@@ -12,13 +12,22 @@ internal sealed class NativeLibraryHandle : SafeHandleZeroOrMinusOneIsInvalid
     }
 
     // Callers hold either the loader lock or a context's reference to this library.
-    public nint GetExport(string name) => NativeLibrary.GetExport(handle, name);
+    public nint GetExport(string name) =>
+        NativeLibrary.TryGetExport(handle, name, out var pointer)
+            ? pointer
+            : throw new NativeExportNotFoundException(name);
 
     protected override bool ReleaseHandle()
     {
         NativeLibrary.Free(handle);
         return true;
     }
+}
+
+internal sealed class NativeExportNotFoundException(string exportName)
+    : EntryPointNotFoundException($"Required hostfxr export '{exportName}' was not found.")
+{
+    public string ExportName { get; } = exportName;
 }
 
 internal sealed class HostContextHandle : SafeHandleZeroOrMinusOneIsInvalid

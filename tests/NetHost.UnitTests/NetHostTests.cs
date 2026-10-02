@@ -53,13 +53,13 @@ public unsafe class NetHostTests
         Assert.That(result.OrThrow(), Is.EqualTo(path));
     }
 
-    [TestCase(ErrorCodes.InvalidArgFailure, NetHostError.InvalidArgFailure)]
-    [TestCase(ErrorCodes.CoreHostLibMissingFailure, NetHostError.HostFxrNotFound)]
-    [TestCase(ErrorCodes.CoreHostLibLoadFailure, NetHostError.HostFxrLoadFailure)]
-    [TestCase(ErrorCodes.CoreHostEntryPointFailure, NetHostError.HostFxrEntryPointNotFound)]
-    [TestCase(ErrorCodes.CoreHostCurHostFindFailure, NetHostError.CurrentHostNotFound)]
-    [TestCase(-1, NetHostError.Unrecoverable)]
-    public void NativeFailuresAreReturnedWithoutDecodingTheBuffer(int code, NetHostError expected)
+    [TestCase(ErrorCodes.InvalidArgFailure, typeof(InvalidArgFailure))]
+    [TestCase(ErrorCodes.CoreHostLibMissingFailure, typeof(HostFxrNotFound))]
+    [TestCase(ErrorCodes.CoreHostLibLoadFailure, typeof(HostFxrLoadFailure))]
+    [TestCase(ErrorCodes.CoreHostEntryPointFailure, typeof(HostFxrEntryPointNotFound))]
+    [TestCase(ErrorCodes.CoreHostCurHostFindFailure, typeof(CurrentHostNotFound))]
+    [TestCase(-1, typeof(UnknownNativeError))]
+    public void NativeFailuresAreReturnedWithoutDecodingTheBuffer(int code, Type expected)
     {
         var result = NativeMethods.ResolvePath(
             null,
@@ -70,7 +70,8 @@ public unsafe class NetHostTests
             }
         );
         Assert.That(result.TryFailure(out var error), Is.True);
-        Assert.That(error, Is.EqualTo(expected));
+        Assert.That(error.Value, Is.TypeOf(expected));
+        Assert.That(error.ToString(), Is.Not.Empty);
     }
 
     [Test]
@@ -91,7 +92,7 @@ public unsafe class NetHostTests
             }
         );
         Assert.That(calls, Is.EqualTo(2));
-        Assert.That(result.Error, Is.EqualTo(NetHostError.HostFxrNotFound));
+        Assert.That(result.Error.Value, Is.TypeOf<HostFxrNotFound>());
     }
 
     [Test]
@@ -108,7 +109,7 @@ public unsafe class NetHostTests
             }
         );
         Assert.That(calls, Is.EqualTo(3));
-        Assert.That(result.Error, Is.EqualTo(NetHostError.BufferTooSmall));
+        Assert.That(result.Error.Value, Is.EqualTo(new BufferTooSmall(2048, 4096)));
     }
 
     [Test]
@@ -125,7 +126,8 @@ public unsafe class NetHostTests
             }
         );
         Assert.That(calls, Is.EqualTo(1));
-        Assert.That(result.Error, Is.EqualTo(NetHostError.Unrecoverable));
+        Assert.That(result.Error.Value, Is.EqualTo(new InvalidNativeResponse(
+            "requested buffer exceeds managed array limits", 512, nuint.MaxValue)));
     }
 
     [TestCase(0)]
@@ -141,7 +143,10 @@ public unsafe class NetHostTests
                 return ErrorCodes.Success;
             }
         );
-        Assert.That(result.Error, Is.EqualTo(NetHostError.Unrecoverable));
+        Assert.That(result.Error.Value, Is.TypeOf<InvalidNativeResponse>());
+        var error = (InvalidNativeResponse)result.Error.Value!;
+        Assert.That(error.Capacity, Is.EqualTo((nuint)512));
+        Assert.That(error.Length, Is.EqualTo((nuint)size));
     }
 
     [Test]
@@ -156,27 +161,65 @@ public unsafe class NetHostTests
                 return ErrorCodes.Success;
             }
         );
-        Assert.That(result.Error, Is.EqualTo(NetHostError.Unrecoverable));
+        Assert.That(result.Error.Value, Is.TypeOf<InvalidNativeResponse>());
+        Assert.That(result.Error.ToString(), Does.Contain("not null-terminated"));
     }
 
-    [TestCase(NetHostError.NativeLibraryNotFound)]
-    [TestCase(NetHostError.NativeEntryPointNotFound)]
-    [TestCase(NetHostError.NativeLibraryIncompatible)]
-    public void NativeLoadingFailuresHaveDistinctErrors(NetHostError expected)
+    [TestCase(typeof(DllNotFoundException), typeof(NativeLibraryNotFound))]
+    [TestCase(typeof(EntryPointNotFoundException), typeof(NativeEntryPointNotFound))]
+    [TestCase(typeof(BadImageFormatException), typeof(NativeLibraryIncompatible))]
+    public void NativeLoadingFailuresHaveDistinctErrors(Type exceptionType, Type expected)
     {
+        var exception = (Exception)Activator.CreateInstance(exceptionType, "native loader diagnostic")!;
         var result = NativeMethods.ResolvePath(
             null,
-            (buffer, length, parameters) =>
-                throw (
-                    expected switch
-                    {
-                        NetHostError.NativeLibraryNotFound => new DllNotFoundException(),
-                        NetHostError.NativeEntryPointNotFound => new EntryPointNotFoundException(),
-                        _ => (Exception)new BadImageFormatException(),
-                    }
-                )
+            (buffer, length, parameters) => throw exception
         );
-        Assert.That(result.Error, Is.EqualTo(expected));
+        Assert.That(result.Error.Value, Is.TypeOf(expected));
+        var cause = result.Error switch
+        {
+            NativeLibraryNotFound error => error.Exception,
+            NativeEntryPointNotFound error => error.Exception,
+            NativeLibraryIncompatible error => (Exception)error.Exception,
+            _ => null,
+        };
+        Assert.That(cause, Is.SameAs(exception));
+        Assert.That(result.Error.ToString(), Does.Contain("nethost"));
+    }
+
+    [Test]
+    public void DiscoveryFailureRetainsBothSearchHints()
+    {
+        var options = new GetHostFxrParameters { DotNetRoot = "dotnet 路径", AssemblyPath = "组件.dll" };
+        var result = NativeMethods.ResolvePath(options,
+            (buffer, length, parameters) => ErrorCodes.CoreHostLibMissingFailure);
+
+        Assert.That(result.Error.Value, Is.EqualTo(new HostFxrNotFound(options.DotNetRoot, options.AssemblyPath)));
+        Assert.That(result.Error.ToString(), Does.Contain(options.DotNetRoot).And.Contain(options.AssemblyPath));
+    }
+
+    [TestCase(-1)]
+    [TestCase(1)]
+    [TestCase(unchecked((int)0x81234567))]
+    public void UnknownNativeCodesRetainOperationAndCode(int code)
+    {
+        var result = NativeMethods.ResolvePath(null, (buffer, length, parameters) => code);
+        Assert.That(result.Error.Value, Is.EqualTo(new UnknownNativeError("get_hostfxr_path", code)));
+        Assert.That(result.ToString(), Does.Contain($"0x{code:X8}"));
+        var exception = Assert.Throws<Exception>(() => result.OrThrow());
+        Assert.That(exception!.Message, Does.Contain("get_hostfxr_path").And.Contain($"0x{code:X8}"));
+    }
+
+    [TestCase(0)]
+    [TestCase(512)]
+    public void BufferTooSmallWithoutGrowthRetainsReportedSizes(int size)
+    {
+        var result = NativeMethods.ResolvePath(null, (buffer, length, parameters) =>
+        {
+            *length = (nuint)size;
+            return ErrorCodes.HostApiBufferTooSmall;
+        });
+        Assert.That(result.Error.Value, Is.EqualTo(new BufferTooSmall(512, (nuint)size)));
     }
 
     [Test]

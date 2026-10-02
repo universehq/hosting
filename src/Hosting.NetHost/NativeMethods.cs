@@ -42,7 +42,7 @@ internal static unsafe partial class NativeMethods
             {
                 fixed (char* assemblyPath = parameters?.AssemblyPath)
                 fixed (char* dotNetRoot = parameters?.DotNetRoot)
-                    return ResolvePath(parameters.HasValue, assemblyPath, dotNetRoot, getPath);
+                    return ResolvePath(parameters, assemblyPath, dotNetRoot, getPath);
             }
 
             // Pin null-terminated UTF-8 arrays for the full sequence of native calls.
@@ -50,19 +50,21 @@ internal static unsafe partial class NativeMethods
             var rootBytes = EncodeUtf8(parameters?.DotNetRoot);
             fixed (byte* assemblyPath = assemblyBytes)
             fixed (byte* dotNetRoot = rootBytes)
-                return ResolvePath(parameters.HasValue, assemblyPath, dotNetRoot, getPath);
+                return ResolvePath(parameters, assemblyPath, dotNetRoot, getPath);
         }
-        catch (DllNotFoundException)
+        catch (DllNotFoundException error)
         {
-            return Result<string, NetHostError>.Failure(NetHostError.NativeLibraryNotFound);
+            return Result<string, NetHostError>.Failure(new NativeLibraryNotFound("nethost", error));
         }
-        catch (EntryPointNotFoundException)
+        catch (EntryPointNotFoundException error)
         {
-            return Result<string, NetHostError>.Failure(NetHostError.NativeEntryPointNotFound);
+            return Result<string, NetHostError>.Failure(
+                new NativeEntryPointNotFound("nethost", "get_hostfxr_path", error)
+            );
         }
-        catch (BadImageFormatException)
+        catch (BadImageFormatException error)
         {
-            return Result<string, NetHostError>.Failure(NetHostError.NativeLibraryIncompatible);
+            return Result<string, NetHostError>.Failure(new NativeLibraryIncompatible("nethost", error));
         }
     }
 
@@ -70,7 +72,7 @@ internal static unsafe partial class NativeMethods
         value is null ? null : Encoding.UTF8.GetBytes(value + '\0');
 
     private static Result<string, NetHostError> ResolvePath(
-        bool hasParameters,
+        GetHostFxrParameters? options,
         void* assemblyPath,
         void* dotNetRoot,
         GetHostFxrPathCallback getPath
@@ -84,31 +86,40 @@ internal static unsafe partial class NativeMethods
         };
         var characterSize = OperatingSystem.IsWindows() ? sizeof(char) : sizeof(byte);
         nuint capacity = 512;
+        var bufferError = new BufferTooSmall(capacity, capacity);
 
         // Discovery searches the filesystem on each call. Retry if the path grows between calls.
         for (var attempt = 0; attempt < 3; attempt++)
         {
-            if (capacity > (nuint)(Array.MaxLength / characterSize))
-                return Result<string, NetHostError>.Failure(NetHostError.Unrecoverable);
-
             var buffer = new byte[checked((int)capacity * characterSize)];
             var length = capacity;
             fixed (byte* pointer = buffer)
             {
-                var code = getPath(pointer, &length, hasParameters ? &parameters : null);
+                var code = getPath(pointer, &length, options.HasValue ? &parameters : null);
                 if (code == ErrorCodes.HostApiBufferTooSmall)
                 {
+                    bufferError = new BufferTooSmall(capacity, length);
                     if (length <= capacity)
-                        return Result<string, NetHostError>.Failure(NetHostError.BufferTooSmall);
+                        return Result<string, NetHostError>.Failure(bufferError);
+                    if (length > (nuint)(Array.MaxLength / characterSize))
+                        return Result<string, NetHostError>.Failure(
+                            new InvalidNativeResponse(
+                                "requested buffer exceeds managed array limits", capacity, length
+                            )
+                        );
                     capacity = length;
                     continue;
                 }
                 if (code != ErrorCodes.Success)
-                    return Result<string, NetHostError>.Failure(NetHostError.MapErrorCode(code));
+                    return Result<string, NetHostError>.Failure(NetHostError.MapErrorCode(code, options));
 
                 // The native length includes the terminator, in char_t units, not bytes.
                 if (length <= 1 || length > capacity)
-                    return Result<string, NetHostError>.Failure(NetHostError.Unrecoverable);
+                    return Result<string, NetHostError>.Failure(
+                        new InvalidNativeResponse(
+                            "path length must include a nonempty path and terminator within the buffer", capacity, length
+                        )
+                    );
 
                 var count = checked((int)length - 1);
                 string path;
@@ -116,19 +127,27 @@ internal static unsafe partial class NativeMethods
                 {
                     var characters = new ReadOnlySpan<char>(pointer, (int)length);
                     if (characters[count] != '\0' || characters[..count].Contains('\0'))
-                        return Result<string, NetHostError>.Failure(NetHostError.Unrecoverable);
+                        return Result<string, NetHostError>.Failure(
+                            new InvalidNativeResponse(
+                                "path contains an embedded null or is not null-terminated", capacity, length
+                            )
+                        );
                     path = new string(characters[..count]);
                 }
                 else
                 {
                     if (buffer[count] != 0 || buffer.AsSpan(0, count).Contains((byte)0))
-                        return Result<string, NetHostError>.Failure(NetHostError.Unrecoverable);
+                        return Result<string, NetHostError>.Failure(
+                            new InvalidNativeResponse(
+                                "path contains an embedded null or is not null-terminated", capacity, length
+                            )
+                        );
                     path = Encoding.UTF8.GetString(buffer.AsSpan(0, count));
                 }
                 return Result<string, NetHostError>.Success(path);
             }
         }
 
-        return Result<string, NetHostError>.Failure(NetHostError.BufferTooSmall);
+        return Result<string, NetHostError>.Failure(bufferError);
     }
 }

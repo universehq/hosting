@@ -20,42 +20,48 @@ public sealed class HostFxrHandle : IDisposable
     /// <summary>Reports successful initialization, including differences from an already loaded runtime.</summary>
     public InitializationStatus InitializationStatus { get; }
 
-    public Result<string, HostFxrHandleError> GetRuntimePropertyValue(string name)
+    public Result<string, HostFxrError> GetRuntimePropertyValue(string name)
     {
         NativeString.Validate(name, nameof(name));
         return Invoke(() =>
         {
             var code = NativeMethods.GetRuntimeProperty(_context, name, out var value);
             return code == 0 && value is not null
-                ? Result<string, HostFxrHandleError>.Success(value)
-                : Result<string, HostFxrHandleError>.Failure(
+                ? Result<string, HostFxrError>.Success(value)
+                : Result<string, HostFxrError>.Failure(
                     code == 0
-                        ? HostFxrHandleError.PropertyNotFound
-                        : HostFxrHandleError.MapErrorCode(code)
+                        ? new PropertyNotFound(name)
+                        : HostFxrError.MapErrorCode(
+                            code,
+                            new NativeErrorContext("hostfxr_get_runtime_property_value", PropertyName: name)
+                        )
                 );
         });
     }
 
     /// <summary>Sets a runtime property before the runtime is loaded. A null value removes it.</summary>
-    public Result<Unit, HostFxrHandleError> SetRuntimePropertyValue(string name, string? value)
+    public Result<Unit, HostFxrError> SetRuntimePropertyValue(string name, string? value)
     {
         NativeString.Validate(name, nameof(name));
         if (value is not null)
             NativeString.Validate(value, nameof(value), allowEmpty: true);
-        return Invoke(() => FromCode(NativeMethods.SetRuntimeProperty(_context, name, value)));
+        return Invoke(() => FromCode(
+            NativeMethods.SetRuntimeProperty(_context, name, value),
+            new NativeErrorContext("hostfxr_set_runtime_property_value", PropertyName: name)
+        ));
     }
 
     /// <summary>Returns a managed snapshot of the context's runtime properties.</summary>
-    public Result<IReadOnlyDictionary<string, string>, HostFxrHandleError> GetRuntimeProperties() =>
+    public Result<IReadOnlyDictionary<string, string>, HostFxrError> GetRuntimeProperties() =>
         Invoke(() =>
         {
             var code = NativeMethods.GetRuntimeProperties(_context, out var properties);
             return code == 0
-                ? Result<IReadOnlyDictionary<string, string>, HostFxrHandleError>.Success(
+                ? Result<IReadOnlyDictionary<string, string>, HostFxrError>.Success(
                     properties
                 )
-                : Result<IReadOnlyDictionary<string, string>, HostFxrHandleError>.Failure(
-                    HostFxrHandleError.MapErrorCode(code)
+                : Result<IReadOnlyDictionary<string, string>, HostFxrError>.Failure(
+                    HostFxrError.MapErrorCode(code, new NativeErrorContext("hostfxr_get_runtime_properties"))
                 );
         });
 
@@ -67,7 +73,7 @@ public sealed class HostFxrHandle : IDisposable
     /// Its unmanaged signature must match TDelegate. Use a non-generic delegate type.</param>
     /// <remarks>Delegates cross a native ABI boundary: their parameters must be marshalable.
     /// Arbitrary managed objects cannot be shared between the host and the hosted runtime.</remarks>
-    public Result<TDelegate, HostFxrHandleError> LoadAssemblyAndGetDelegate<TDelegate>(
+    public Result<TDelegate, HostFxrError> LoadAssemblyAndGetDelegate<TDelegate>(
         string assemblyPath,
         string typeName,
         string methodName,
@@ -82,7 +88,7 @@ public sealed class HostFxrHandle : IDisposable
     }
 
     /// <summary>Binds a method in the default load context to a concrete, ABI-compatible delegate.</summary>
-    public Result<TDelegate, HostFxrHandleError> GetDelegate<TDelegate>(
+    public Result<TDelegate, HostFxrError> GetDelegate<TDelegate>(
         string typeName,
         string methodName,
         string delegateTypeName
@@ -97,10 +103,9 @@ public sealed class HostFxrHandle : IDisposable
     /// <summary>Loads an assembly and wraps the default component entry point as a C# delegate.</summary>
     /// <remarks>The hosted method must have signature int(nint data, int size).
     /// The delegate passes a copy of TData using its in-memory size, and returns the method's exit code.</remarks>
-    public Result<
-        ComponentEntryPoint<TData>,
-        HostFxrHandleError
-    > LoadAssemblyAndGetEntryPoint<TData>(string assemblyPath, string typeName, string methodName)
+    public Result<ComponentEntryPoint<TData>, HostFxrError> LoadAssemblyAndGetEntryPoint<TData>(
+        string assemblyPath, string typeName, string methodName
+    )
         where TData : unmanaged
     {
         NativeString.Validate(assemblyPath, nameof(assemblyPath));
@@ -109,25 +114,28 @@ public sealed class HostFxrHandle : IDisposable
     }
 
     /// <summary>Wraps a default component entry point from the default load context.</summary>
-    public Result<ComponentEntryPoint<TData>, HostFxrHandleError> GetEntryPoint<TData>(
+    public Result<ComponentEntryPoint<TData>, HostFxrError> GetEntryPoint<TData>(
         string typeName,
         string methodName
     )
         where TData : unmanaged =>
         Bind(null, typeName, methodName, null).Convert(CreateEntryPoint<TData>);
 
-    public Result<Unit, HostFxrHandleError> LoadAssembly(string assemblyPath)
+    public Result<Unit, HostFxrError> LoadAssembly(string assemblyPath)
     {
         NativeString.Validate(assemblyPath, nameof(assemblyPath));
         var fullPath = Path.GetFullPath(assemblyPath);
         return Invoke(() =>
             GetRuntimeDelegate(HostFxrDelegateType.LoadAssembly)
-                .Convert(pointer => FromCode(CoreClrDelegates.LoadAssembly(pointer, fullPath)))
+                .Convert(pointer => FromCode(
+                    CoreClrDelegates.LoadAssembly(pointer, fullPath),
+                    new NativeErrorContext("load_assembly", fullPath)
+                ))
         );
     }
 
     /// <summary>Loads assembly and optional symbol bytes into the default load context.</summary>
-    public Result<Unit, HostFxrHandleError> LoadAssemblyBytes(
+    public Result<Unit, HostFxrError> LoadAssemblyBytes(
         ReadOnlySpan<byte> assemblyBytes,
         ReadOnlySpan<byte> symbolsBytes = default
     )
@@ -143,14 +151,15 @@ public sealed class HostFxrHandle : IDisposable
                 var result = GetRuntimeDelegate(HostFxrDelegateType.LoadAssemblyBytes);
                 return result.TrySuccess(out var pointer)
                     ? FromCode(
-                        CoreClrDelegates.LoadAssemblyBytes(pointer, assemblyBytes, symbolsBytes)
+                        CoreClrDelegates.LoadAssemblyBytes(pointer, assemblyBytes, symbolsBytes),
+                        new NativeErrorContext("load_assembly_bytes", "assembly bytes")
                     )
-                    : Result<Unit, HostFxrHandleError>.Failure(result.Error);
+                    : Result<Unit, HostFxrError>.Failure(result.Error);
             }
-            catch (EntryPointNotFoundException)
+            catch (NativeExportNotFoundException error)
             {
-                return Result<Unit, HostFxrHandleError>.Failure(
-                    HostFxrHandleError.EntryPointNotFound
+                return Result<Unit, HostFxrError>.Failure(
+                    new EntryPointNotFound(error.ExportName)
                 );
             }
             finally
@@ -179,7 +188,7 @@ public sealed class HostFxrHandle : IDisposable
         }
     }
 
-    private Result<nint, HostFxrHandleError> Bind(
+    private Result<nint, HostFxrError> Bind(
         string? assemblyPath,
         string typeName,
         string methodName,
@@ -204,15 +213,25 @@ public sealed class HostFxrHandle : IDisposable
                         delegateTypeName,
                         out var pointer
                     );
-                    return PointerResult(code, pointer);
+                    return PointerResult(
+                        code, pointer,
+                        new NativeErrorContext(
+                            assemblyPath is null ? "get_function_pointer" : "load_assembly_and_get_function_pointer",
+                            assemblyPath ?? "", TypeName: typeName, MethodName: methodName,
+                            DelegateTypeName: delegateTypeName ?? "component entry point"
+                        )
+                    );
                 });
         });
     }
 
-    private Result<nint, HostFxrHandleError> GetRuntimeDelegate(HostFxrDelegateType type)
+    private Result<nint, HostFxrError> GetRuntimeDelegate(HostFxrDelegateType type)
     {
         var code = NativeMethods.GetRuntimeDelegate(_context, type, out var pointer);
-        return PointerResult(code, pointer);
+        return PointerResult(
+            code, pointer,
+            new NativeErrorContext($"hostfxr_get_runtime_delegate ({type})")
+        );
     }
 
     private ComponentEntryPoint<TData> CreateEntryPoint<TData>(nint pointer)
@@ -233,7 +252,7 @@ public sealed class HostFxrHandle : IDisposable
             }
         };
 
-    private Result<T, HostFxrHandleError> Invoke<T>(Func<Result<T, HostFxrHandleError>> operation)
+    private Result<T, HostFxrError> Invoke<T>(Func<Result<T, HostFxrError>> operation)
     {
         lock (_sync)
         {
@@ -242,9 +261,9 @@ public sealed class HostFxrHandle : IDisposable
             {
                 return operation();
             }
-            catch (EntryPointNotFoundException)
+            catch (NativeExportNotFoundException error)
             {
-                return Result<T, HostFxrHandleError>.Failure(HostFxrHandleError.EntryPointNotFound);
+                return Result<T, HostFxrError>.Failure(new EntryPointNotFound(error.ExportName));
             }
             finally
             {
@@ -268,19 +287,21 @@ public sealed class HostFxrHandle : IDisposable
             );
     }
 
-    private static Result<nint, HostFxrHandleError> PointerResult(int code, nint pointer) =>
+    private static Result<nint, HostFxrError> PointerResult(
+        int code, nint pointer, NativeErrorContext context
+    ) =>
         code == 0 && pointer != 0
-            ? Result<nint, HostFxrHandleError>.Success(pointer)
-            : Result<nint, HostFxrHandleError>.Failure(
+            ? Result<nint, HostFxrError>.Success(pointer)
+            : Result<nint, HostFxrError>.Failure(
                 code == 0
-                    ? HostFxrHandleError.HostInvalidState
-                    : HostFxrHandleError.MapErrorCode(code)
+                    ? new HostInvalidState(context.Operation)
+                    : HostFxrError.MapErrorCode(code, context)
             );
 
-    private static Result<Unit, HostFxrHandleError> FromCode(int code) =>
+    private static Result<Unit, HostFxrError> FromCode(int code, NativeErrorContext context) =>
         code == 0
-            ? Result<Unit, HostFxrHandleError>.Success(Unit.Instance)
-            : Result<Unit, HostFxrHandleError>.Failure(HostFxrHandleError.MapErrorCode(code));
+            ? Result<Unit, HostFxrError>.Success(Unit.Instance)
+            : Result<Unit, HostFxrError>.Failure(HostFxrError.MapErrorCode(code, context));
 
     public void Close() => Dispose();
 
